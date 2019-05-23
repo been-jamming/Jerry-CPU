@@ -391,7 +391,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 			line_length = strlen(char_buffer + current_character + 1);
 			
 			commenting = 0;
-			while(line_length && (char_buffer[current_character + line_length] == ' ' || char_buffer[current_character + line_length] == '\t' || char_buffer[current_character + line_length] == '\n' || char_buffer[current_character + line_length] == '`')){
+			while(line_length && (char_buffer[current_character + line_length] == ' ' || char_buffer[current_character + line_length] == '\t' || char_buffer[current_character + line_length] == '\n' || char_buffer[current_character + line_length] == '`' || commenting)){
 				if(char_buffer[current_character + line_length] == '`'){
 					commenting = !commenting;
 				}
