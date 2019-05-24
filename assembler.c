@@ -203,6 +203,7 @@ unsigned char write_instruction_register(char *buffer, FILE *foutput){
 	write_register(dest, foutput);
 	write_register(source, foutput);
 	fprintf(foutput, "0000|0000|");
+	return 1;
 }
 
 unsigned char write_instruction_immediate(char *buffer, FILE *foutput){
@@ -265,6 +266,8 @@ unsigned char write_instruction_output_immediate(char *buffer, FILE *foutput){
 	write_register(dest, foutput);
 	fprintf(foutput, "0000|");
 	write_immediate(immediate, foutput);
+
+	return 1;
 }
 
 unsigned char write_instruction_only_output(char *buffer, FILE *foutput){
@@ -276,6 +279,8 @@ unsigned char write_instruction_only_output(char *buffer, FILE *foutput){
 	
 	write_register(dest, foutput);
 	fprintf(foutput, "0000|0000|0000|");
+
+	return 1;
 }
 
 unsigned char replace_definitions(char *char_buffer, size_t buffer_size){
@@ -329,18 +334,14 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 	size_t line_length;
 	size_t current_character;
 	unsigned int current_address = 0;
-	unsigned char dest;
-	unsigned char condition;
-	unsigned char source_1;
-	unsigned char source_2;
-	unsigned int dest_address;
-	unsigned char immediate;
 	unsigned char no_error;
 	unsigned char commenting;
 	unsigned int *address_pointer;
+	unsigned int current_line = 0;
 
 	while(!feof(finput)){
 		fgets(char_buffer, 256, finput);
+		current_line++;
 		if(feof(finput)){
 			break;
 		}
@@ -350,7 +351,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 		}
 
 		if(!replace_definitions(char_buffer, 256)){
-			printf("Error: %s (line %d)\n", error_message, current_address + 2);
+			printf("Error: %s (line %d)\n", error_message, current_line);
 			free_dictionary(definitions, free);
 			free_dictionary(labels, free);
 			fclose(finput);
@@ -361,7 +362,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 		line_length = strlen(char_buffer);
 		if(line_length != 0){
 			if(char_buffer[line_length - 1] != '\n' && !feof(finput)){
-				printf("Error: line %d too long\n", current_address + 1);
+				printf("Error: line %d too long\n", current_line + 1);
 				fclose(finput);
 				fclose(foutput);
 				free_dictionary(definitions, free);
@@ -380,7 +381,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 				if(char_buffer[current_character] == ':'){
 					continue;
 				}
-			} else if(line_length == 1 && char_buffer[0] == '\n' || char_buffer[0] == ' ' || char_buffer[0] == '\t'){
+			} else if(line_length == 1 && (char_buffer[0] == '\n' || char_buffer[0] == ' ' || char_buffer[0] == '\t')){
 				continue;
 			}
 		}
@@ -390,18 +391,13 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 			current_character++;
 		}
 
-		if(!char_buffer[current_character]){
-			printf("Error: Invalid syntax (line %d)\n", current_address + 2);
-			free_dictionary(definitions, free);
-			free_dictionary(labels, free);
-			fclose(finput);
-			fclose(foutput);
-			exit(1);
-		}		
-	
 		fprintf(foutput, "%d: ", current_address);
+		if(!char_buffer[current_character]){
+			current_character--;
+		}
 		char_buffer[current_character] = (char) 0;
 		no_error = 1;
+
 		if(!strcmp(char_buffer, "addi")){
 			fprintf(foutput, "0000|");
 			no_error = write_instruction_immediate(char_buffer + current_character + 1, foutput);
@@ -461,7 +457,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 
 			address_pointer = read_dictionary(labels, char_buffer + current_character + 1, 0);
 			if(!address_pointer){
-				printf("Error: Unresolved label (line %d)\n", current_address + 1);
+				printf("Error: Unresolved label (line %d)\n", current_line);
 				free_dictionary(definitions, free);
 				free_dictionary(labels, free);
 				fclose(finput);
@@ -503,7 +499,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 		} else if(!strcmp(char_buffer, "nop")){
 			fprintf(foutput, "0000|0000|0000|0000|0000|\n");
 		} else {
-			printf("Error: Unrecognized operation (line %d)\n", current_address + 2);
+			printf("Error: Unrecognized operation (line %d)\n", current_line);
 			free_dictionary(definitions, free);
 			free_dictionary(labels, free);
 			fclose(finput);
@@ -512,7 +508,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 		}
 
 		if(!no_error){
-			printf("Error: %s (line %d)\n", error_message, current_address + 1);
+			printf("Error: %s (line %d)\n", error_message, current_line);
 			free_dictionary(labels, free);
 			free_dictionary(definitions, free);
 			fclose(finput);
@@ -592,7 +588,6 @@ void populate_labels(FILE *fp){
 	size_t current_character;
 	unsigned char commenting;
 	unsigned int *new_address;
-	char literal_buffer[32];
 	char *new_literal;
 
 	while(!feof(fp)){
