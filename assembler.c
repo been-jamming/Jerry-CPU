@@ -4,6 +4,8 @@
 #include "dictionary.h"
 
 char *error_message;
+dictionary definitions;
+dictionary labels;
 
 unsigned char get_instruction_register(char *buffer, unsigned char *dest, unsigned char *source){
 	int source_int;
@@ -276,6 +278,53 @@ unsigned char write_instruction_only_output(char *buffer, FILE *foutput){
 	fprintf(foutput, "0000|0000|0000|");
 }
 
+unsigned char replace_definitions(char *char_buffer, size_t buffer_size){
+	size_t string_length;
+	size_t replace_length;
+	size_t identifier_length;
+	size_t current_character = 0;
+	size_t end_identifier;
+	char *replace_string;
+
+	string_length = strlen(char_buffer);
+	while(char_buffer[current_character]){
+		if(char_buffer[current_character] == '\''){
+			end_identifier = current_character + 1;
+			while(char_buffer[end_identifier] != '\'' && char_buffer[end_identifier]){
+				end_identifier++;
+			}
+
+			if(!char_buffer[end_identifier]){
+				return 1;
+			}
+
+			char_buffer[end_identifier] = (char) 0;
+
+			identifier_length = strlen(char_buffer + current_character + 1);
+
+			replace_string = read_dictionary(definitions, char_buffer + current_character + 1, 0);
+			if(!replace_string){
+				printf("%s\n", char_buffer + current_character + 1);
+				error_message = "Unrecognized identifier";
+				return 0;
+			}
+
+			replace_length = strlen(replace_string);
+			if(string_length + replace_length - identifier_length - 1 > buffer_size){
+				error_message = "Replacement makes line too long";
+				return 0;
+			}
+
+			memmove(char_buffer + end_identifier + replace_length - identifier_length - 1, char_buffer + end_identifier + 1, strlen(char_buffer + end_identifier + 1) + 1);
+			memcpy(char_buffer + current_character, replace_string, replace_length);
+		}
+
+		current_character++;
+	}
+
+	return 1;
+}
+
 void write_output(FILE *finput, FILE *foutput, dictionary labels){
 	char char_buffer[256];
 	size_t line_length;
@@ -297,8 +346,17 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 			break;
 		}
 
-		if(char_buffer[0] == '`'){
+		if(char_buffer[0] == '`' || char_buffer[0] == '#'){
 			continue;
+		}
+
+		if(!replace_definitions(char_buffer, 256)){
+			printf("Error: %s (line %d)\n", error_message, current_address + 2);
+			free_dictionary(definitions, free);
+			free_dictionary(labels, free);
+			fclose(finput);
+			fclose(foutput);
+			exit(1);
 		}
 
 		line_length = strlen(char_buffer);
@@ -307,6 +365,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 				printf("Error: line %d too long\n", current_address + 1);
 				fclose(finput);
 				fclose(foutput);
+				free_dictionary(definitions, free);
 				free_dictionary(labels, free);
 				exit(1);
 			}
@@ -334,6 +393,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 
 		if(!char_buffer[current_character]){
 			printf("Error: Invalid syntax (line %d)\n", current_address + 2);
+			free_dictionary(definitions, free);
 			free_dictionary(labels, free);
 			fclose(finput);
 			fclose(foutput);
@@ -403,6 +463,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 			address_pointer = read_dictionary(labels, char_buffer + current_character + 1, 0);
 			if(!address_pointer){
 				printf("Error: Unresolved label (line %d)\n", current_address + 1);
+				free_dictionary(definitions, free);
 				free_dictionary(labels, free);
 				fclose(finput);
 				fclose(foutput);
@@ -442,6 +503,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 			fprintf(foutput, "\n");
 		} else {
 			printf("Error: Unrecognized operation (line %d)\n", current_address + 2);
+			free_dictionary(definitions, free);
 			free_dictionary(labels, free);
 			fclose(finput);
 			fclose(foutput);
@@ -460,7 +522,69 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 	}
 }
 
-void populate_labels(dictionary *labels, FILE *fp){
+void populate_definitions(FILE *fp){
+	char char_buffer[256];
+	size_t line_length;
+	size_t current_character;
+	size_t end_identifier;
+	unsigned int current_address = 1;
+	char *new_string;
+	
+	while(!feof(fp)){
+		fgets(char_buffer, 256, fp);
+		if(char_buffer[0] == '#'){
+			line_length = strlen(char_buffer);
+			if(char_buffer[line_length - 1] != '\n' && !feof(fp)){
+				printf("Error: Line %d too long\n", current_address + 1);
+				fclose(fp);
+				free_dictionary(definitions, free);
+				free_dictionary(labels, free);
+				exit(1);
+			}
+			if(char_buffer[line_length - 1] == '\n'){
+				char_buffer[line_length - 1] = (char) 0;
+			}
+
+			current_character = 1;
+			while(char_buffer[current_character] != ' ' && char_buffer[current_character]){
+				current_character++;
+			}
+
+			if(!char_buffer[current_character]){
+				printf("Error: Invalid syntax (line %d)\n", current_address);
+				fclose(fp);
+				free_dictionary(definitions, free);
+				free_dictionary(labels, free);
+				exit(1);
+			}
+
+			char_buffer[current_character] = (char) 0;
+			if(!strcmp(char_buffer + 1, "define")){
+				end_identifier = current_character + 1;
+				while(char_buffer[end_identifier] != ' ' && char_buffer[end_identifier]){
+					end_identifier++;
+				}
+
+				if(char_buffer[end_identifier] == ' '){
+					char_buffer[end_identifier] = (char) 0;
+					new_string = malloc(sizeof(char)*(line_length - end_identifier - 1));
+					strcpy(new_string, char_buffer + end_identifier + 1);
+					write_dictionary(&definitions, char_buffer + current_character + 1, new_string, 0);
+					printf("%s : %s\n", char_buffer + current_character + 1, new_string);
+				}
+			} else {
+				printf("Error: Unknown directive (line %d)\n", current_address);
+				fclose(fp);
+				free_dictionary(definitions, free);
+				free_dictionary(labels, free);
+				exit(1);
+			}
+		}
+		current_address++;
+	}
+}
+
+void populate_labels(FILE *fp){
 	unsigned int current_address = 0;
 	char char_buffer[256];
 	size_t line_length;
@@ -473,9 +597,10 @@ void populate_labels(dictionary *labels, FILE *fp){
 		line_length = strlen(char_buffer);
 		if(line_length != 0){
 			if(char_buffer[line_length - 1] != '\n' && !feof(fp)){
-				printf("Error: line %d too long\n", current_address + 1);
+				printf("Error: Line %d too long\n", current_address + 1);
 				fclose(fp);
-				free_dictionary(*labels, free);
+				free_dictionary(definitions, free);
+				free_dictionary(labels, free);
 				exit(1);
 			}
 			if(line_length > 1){
@@ -491,7 +616,7 @@ void populate_labels(dictionary *labels, FILE *fp){
 					char_buffer[current_character] = (char) 0;
 					new_address = malloc(sizeof(unsigned int));
 					*new_address = current_address;
-					write_dictionary(labels, char_buffer, new_address, 0);
+					write_dictionary(&labels, char_buffer, new_address, 0);
 				}
 			}
 		}
@@ -503,7 +628,6 @@ int main(int argc, char **argv){
 	FILE *finput;
 	FILE *foutput;
 	char *output_file_name;
-	dictionary labels;
 
 	if(argc < 2){
 		printf("Error: expected input file\n");
@@ -519,7 +643,11 @@ int main(int argc, char **argv){
 	}
 
 	labels = create_dictionary(NULL);
-	populate_labels(&labels, finput);
+	definitions = create_dictionary(NULL);
+	populate_definitions(finput);
+	rewind(finput);
+	populate_labels(finput);
+	rewind(finput);
 
 	if(argc == 2){
 		output_file_name = "a.o";
@@ -528,8 +656,6 @@ int main(int argc, char **argv){
 	}
 
 	foutput = fopen(output_file_name, "w");
-	rewind(finput);
-
 	write_output(finput, foutput, labels);
 	
 	fclose(finput);
