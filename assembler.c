@@ -304,7 +304,6 @@ unsigned char replace_definitions(char *char_buffer, size_t buffer_size){
 
 			replace_string = read_dictionary(definitions, char_buffer + current_character + 1, 0);
 			if(!replace_string){
-				printf("%s\n", char_buffer + current_character + 1);
 				error_message = "Unrecognized identifier";
 				return 0;
 			}
@@ -501,6 +500,8 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 			fprintf(foutput, "1111|");
 			no_error = write_instruction(char_buffer + current_character + 1, foutput);
 			fprintf(foutput, "\n");
+		} else if(!strcmp(char_buffer, "nop")){
+			fprintf(foutput, "0000|0000|0000|0000|0000|\n");
 		} else {
 			printf("Error: Unrecognized operation (line %d)\n", current_address + 2);
 			free_dictionary(definitions, free);
@@ -571,7 +572,6 @@ void populate_definitions(FILE *fp){
 					new_string = malloc(sizeof(char)*(line_length - end_identifier - 1));
 					strcpy(new_string, char_buffer + end_identifier + 1);
 					write_dictionary(&definitions, char_buffer + current_character + 1, new_string, 0);
-					printf("%s : %s\n", char_buffer + current_character + 1, new_string);
 				}
 			} else {
 				printf("Error: Unknown directive (line %d)\n", current_address);
@@ -592,9 +592,16 @@ void populate_labels(FILE *fp){
 	size_t current_character;
 	unsigned char commenting;
 	unsigned int *new_address;
+	char literal_buffer[32];
+	char *new_literal;
 
 	while(!feof(fp)){
 		fgets(char_buffer, 256, fp);
+
+		if(char_buffer[0] == '#' || char_buffer[0] == '\n'){
+			continue;
+		}
+
 		line_length = strlen(char_buffer);
 		if(line_length != 0){
 			if(char_buffer[line_length - 1] != '\n' && !feof(fp)){
@@ -618,6 +625,16 @@ void populate_labels(FILE *fp){
 					new_address = malloc(sizeof(unsigned int));
 					*new_address = current_address;
 					write_dictionary(&labels, char_buffer, new_address, 0);
+					char_buffer[current_character] = 'L';
+					char_buffer[current_character + 1] = (char) 0;
+					new_literal = malloc(sizeof(char)*4);
+					sprintf(new_literal, "%d", (int) (current_address&0xFF));
+					write_dictionary(&definitions, char_buffer, new_literal, 0);
+					char_buffer[current_character] = 'H';
+					new_literal = malloc(sizeof(char)*3);
+					sprintf(new_literal, "%d", (int) ((current_address&0xF00)>>8));
+					write_dictionary(&definitions, char_buffer, new_literal, 0);
+					continue;
 				}
 			}
 		}
