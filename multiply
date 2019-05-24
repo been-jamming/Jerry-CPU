@@ -1,0 +1,41 @@
+#define input0_0 R0
+#define input0_1 R1
+#define input1_0 R2
+#define input1_1 R3
+#define output_0 R4
+#define output_1 R5
+#define trash R15
+
+read1:
+read 'input0_1'
+bz read1
+
+read2:
+read 'input0_0'
+bz read2
+
+read3:
+read 'input1_1'
+bz read3
+
+read4:
+read 'input1_0'
+bz read4
+
+loop:
+andi 'trash' 'input0_0' 1
+bz dont_add
+add 'output_0' 'output_0' 'input1_0'
+addc 'output_1' 'output_1' 'input1_1'
+
+dont_add:
+add 'input1_0' 'input1_0' 'input1_0'
+addc 'input1_1' 'input1_1' 'input1_1'
+nop 
+rshft 'input0_1' 'input0_1'
+rshft 'input0_0' 'input0_0'
+bz halt
+jmp loop
+
+halt:
+jmp halt
