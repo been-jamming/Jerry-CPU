@@ -513,6 +513,7 @@ void write_output(FILE *finput, FILE *foutput, dictionary labels){
 		if(!no_error){
 			printf("Error: %s (line %d)\n", error_message, current_address + 1);
 			free_dictionary(labels, free);
+			free_dictionary(definitions, free);
 			fclose(finput);
 			fclose(foutput);
 			exit(1);
@@ -661,6 +662,7 @@ int main(int argc, char **argv){
 	fclose(finput);
 	fclose(foutput);
 	free_dictionary(labels, free);
+	free_dictionary(definitions, free);
 
 	return 0;
 }
