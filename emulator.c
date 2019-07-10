@@ -211,7 +211,7 @@ char *load_file(char *file_name){
 	while(!feof(finput)){
 		current_pos = 0;
 		fgets(char_buffer, 256, finput);
-		while(char_buffer[current_pos] != ' '){
+		while(char_buffer[current_pos] != ' ' && current_pos < 254){
 			current_pos++;
 		}
 		current_pos++;
